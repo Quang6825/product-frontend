@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Product Manager</title>
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+</head>
+<body class="container my-5">
+  <h1 class="mb-4">🛒 Product Manager</h1>
+
+  <!-- Search + Sort + Export -->
+  <div class="row mb-4">
+    <div class="col-md-4">
+      <input type="text" id="search" class="form-control" placeholder="🔍 Search by name..." />
+    </div>
+    <div class="col-md-4">
+      <select id="sort" class="form-select">
+        <option value="asc">Sort by Price ↑</option>
+        <option value="desc">Sort by Price ↓</option>
+      </select>
+    </div>
+    <div class="col-md-4 text-end">
+      <button class="btn btn-success me-2" onclick="exportJSON()">⬇ Export JSON</button>
+      <button class="btn btn-outline-secondary" onclick="exportCSV()">⬇ Export CSV</button>
+    </div>
+  </div>
+
+  <!-- Import JSON -->
+  <div class="input-group mb-4">
+    <input type="file" id="import-file" class="form-control" accept=".json" />
+    <button class="btn btn-outline-primary" onclick="importProducts()">📤 Import JSON</button>
+  </div>
+
+  <!-- Product List -->
+  <ul id="product-list" class="list-group mb-4"></ul>
+
+  <!-- Pagination -->
+  <nav>
+    <ul id="pagination" class="pagination justify-content-center"></ul>
+  </nav>
+
+  <!-- Add Product -->
+  <h2>Add Product</h2>
+  <form id="product-form" class="row g-2 my-3">
+    <div class="col-auto">
+      <input type="text" id="name" class="form-control" placeholder="Product Name" required />
+    </div>
+    <div class="col-auto">
+      <input type="number" id="price" class="form-control" placeholder="Price" required />
+    </div>
+    <div class="col-auto">
+      <button type="submit" class="btn btn-primary">Add</button>
+    </div>
+  </form>
+
+  <script>
+    const apiUrl = "https://localhost:7023/api/products"; // Thay bằng cổng đúng nếu khác
+    let allProducts = [];
+    let currentPage = 1;
+    const perPage = 5;
+
+    async function fetchProducts() {
+      try {
+        const res = await fetch(apiUrl);
+        if (!res.ok) throw new Error();
+        allProducts = await res.json();
+        localStorage.setItem("cachedProducts", JSON.stringify(allProducts));
+        renderList();
+      } catch (err) {
+        const cached = localStorage.getItem("cachedProducts");
+        if (cached) {
+          allProducts = JSON.parse(cached);
+          renderList();
+          alert("⚠️ Using offline data (LocalStorage)");
+        } else {
+          alert("❌ Failed to fetch data");
+        }
+      }
+    }
+
+    function renderList() {
+      const list = document.getElementById("product-list");
+      const search = document.getElementById("search").value.toLowerCase();
+      const sort = document.getElementById("sort").value;
+
+      const filtered = allProducts
+        .filter(p => p.name.toLowerCase().includes(search))
+        .sort((a, b) => sort === "asc" ? a.price - b.price : b.price - a.price);
+
+      const start = (currentPage - 1) * perPage;
+      const paginated = filtered.slice(start, start + perPage);
+
+      list.innerHTML = "";
+      paginated.forEach(p => {
+        const li = document.createElement("li");
+        li.className = "list-group-item d-flex justify-content-between align-items-center";
+        li.innerHTML = `
+          <span id="display-${p.id}">${p.name} - $${p.price}</span>
+          <div>
+            <button class="btn btn-sm btn-warning me-1" onclick="editProduct(${p.id}, '${p.name}', ${p.price})">Edit</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteProduct(${p.id})">Delete</button>
+          </div>
+        `;
+        list.appendChild(li);
+      });
+
+      renderPagination(filtered.length);
+    }
+
+    function renderPagination(totalItems) {
+      const totalPages = Math.ceil(totalItems / perPage);
+      const ul = document.getElementById("pagination");
+      ul.innerHTML = "";
+      for (let i = 1; i <= totalPages; i++) {
+        const li = document.createElement("li");
+        li.className = `page-item ${i === currentPage ? "active" : ""}`;
+        li.innerHTML = `<a class="page-link" href="#">${i}</a>`;
+        li.onclick = () => {
+          currentPage = i;
+          renderList();
+        };
+        ul.appendChild(li);
+      }
+    }
+
+    function editProduct(id, name, price) {
+      const display = document.getElementById("display-" + id);
+      display.innerHTML = `
+        <input type="text" id="edit-name-${id}" value="${name}" class="form-control d-inline w-auto" />
+        <input type="number" id="edit-price-${id}" value="${price}" class="form-control d-inline w-auto mx-2" />
+        <button class="btn btn-success btn-sm" onclick="saveEdit(${id})">Save</button>
+        <button class="btn btn-secondary btn-sm" onclick="renderList()">Cancel</button>
+      `;
+    }
+
+    async function saveEdit(id) {
+      const name = document.getElementById(`edit-name-${id}`).value.trim();
+      const price = parseFloat(document.getElementById(`edit-price-${id}`).value);
+
+      if (!name || price <= 0) return alert("❌ Invalid input");
+
+      try {
+        const res = await fetch(`${apiUrl}/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, name, price })
+        });
+        if (!res.ok) throw new Error();
+        fetchProducts();
+      } catch {
+        alert("❌ Update failed");
+      }
+    }
+
+    async function deleteProduct(id) {
+      if (!confirm("❗ Are you sure to delete?")) return;
+      try {
+        const res = await fetch(`${apiUrl}/${id}`, { method: "DELETE" });
+        if (!res.ok) throw new Error();
+        fetchProducts();
+      } catch {
+        alert("❌ Delete failed");
+      }
+    }
+
+    document.getElementById("product-form").addEventListener("submit", async e => {
+      e.preventDefault();
+      const name = document.getElementById("name").value.trim();
+      const price = parseFloat(document.getElementById("price").value);
+
+      if (!name || price <= 0) return alert("❌ Invalid input");
+
+      try {
+        const res = await fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, price })
+        });
+        if (!res.ok) throw new Error();
+        e.target.reset();
+        fetchProducts();
+      } catch {
+        alert("❌ Add failed");
+      }
+    });
+
+    function exportJSON() {
+      const blob = new Blob([JSON.stringify(allProducts, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "products.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function exportCSV() {
+      const header = "Id,Name,Price\n";
+      const rows = allProducts.map(p => `${p.id},"${p.name}",${p.price}`).join("\n");
+      const csv = header + rows;
+
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "products.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function importProducts() {
+      const fileInput = document.getElementById("import-file");
+      const file = fileInput.files[0];
+      if (!file) return alert("Please choose a file!");
+
+      const reader = new FileReader();
+      reader.onload = async function (e) {
+        try {
+          const imported = JSON.parse(e.target.result);
+          if (!Array.isArray(imported)) throw new Error("Invalid format");
+          for (const p of imported) {
+            if (p.name && p.price) {
+              await fetch(apiUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: p.name, price: p.price })
+              });
+            }
+          }
+          alert("✅ Import success!");
+          fileInput.value = "";
+          fetchProducts();
+        } catch (err) {
+          alert("❌ Import failed: " + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    document.getElementById("search").addEventListener("input", () => {
+      currentPage = 1;
+      renderList();
+    });
+
+    document.getElementById("sort").addEventListener("change", () => {
+      renderList();
+    });
+
+    fetchProducts();
+  </script>
+</body>
+</html>
