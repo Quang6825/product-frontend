@@ -252,41 +252,45 @@
       }
     }
 
-    function editProduct(id, name, price) {
-      const display = document.getElementById("display-" + id);
-      display.innerHTML = `
-        <input type="text" id="edit-name-${id}" value="${name}" class="form-control d-inline w-auto mb-2" />
-    	<input type="number" id="edit-price-${id}" value="${price}" class="form-control d-inline w-auto mb-2 mx-2" />
-   	 <input type="number" id="edit-quantity-${id}" value="${quantity}" class="form-control d-inline w-auto mb-2" />
-   	 <input type="text" id="edit-category-${id}" value="${category}" class="form-control d-inline w-auto mb-2 mx-2" />
-   	 <br />
-  	  <button class="btn btn-success btn-sm me-2" onclick="saveEdit(${id})">Save</button>
-  	  <button class="btn btn-secondary btn-sm" onclick="renderList()">Cancel</button>
-     	 `;
-    }
-
-    async function saveEdit(id) {
-      const name = document.getElementById(`edit-name-${id}`).value.trim();
-      const price = parseFloat(document.getElementById(`edit-price-${id}`).value);
-
-      if (!name || price <= 0) {
-        showToast("❌ Invalid input", "error");
-        return;
+      function editProduct(id, name, price, quantity, category) {
+          const display = document.getElementById("display-" + id);
+          display.innerHTML = `
+    <input type="text" id="edit-name-${id}" value="${name}" class="form-control d-inline w-auto mb-2" />
+    <input type="number" id="edit-price-${id}" value="${price}" class="form-control d-inline w-auto mb-2 mx-2" />
+    <input type="number" id="edit-quantity-${id}" value="${quantity}" class="form-control d-inline w-auto mb-2" />
+    <input type="text" id="edit-category-${id}" value="${category}" class="form-control d-inline w-auto mb-2 mx-2" />
+    <br />
+    <button class="btn btn-success btn-sm me-2" onclick="saveEdit(${id})">Save</button>
+    <button class="btn btn-secondary btn-sm" onclick="renderList()">Cancel</button>
+  `;
       }
 
-      try {
-        const res = await fetch(`${apiUrl}/${id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id, name, price })
-        });
-        if (!res.ok) throw new Error();
-        showToast("✅ Update success", "success");
-        fetchProducts();
-      } catch {
-        showToast("❌ Update failed", "error");
+
+      async function saveEdit(id) {
+          const name = document.getElementById(`edit-name-${id}`).value.trim();
+          const price = parseFloat(document.getElementById(`edit-price-${id}`).value);
+          const quantity = parseInt(document.getElementById(`edit-quantity-${id}`).value);
+          const category = document.getElementById(`edit-category-${id}`).value.trim();
+
+          if (!name || isNaN(price) || price <= 0 || isNaN(quantity)) {
+              showToast("❌ Invalid input", "error");
+              return;
+          }
+
+          try {
+              const res = await fetch(`${apiUrl}/${id}`, {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ id, name, price, quantity, category })
+              });
+              if (!res.ok) throw new Error();
+              showToast("✅ Update success", "success");
+              fetchProducts();
+          } catch {
+              showToast("❌ Update failed", "error");
+          }
       }
-    }
+
 
     async function deleteProduct(id) {
       if (!confirm("❗ Are you sure to delete?")) return;
